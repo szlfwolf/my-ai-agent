@@ -9,15 +9,16 @@ import signal
 import requests
 import logging
 import argparse
+from os import getenv
 
 parser = argparse.ArgumentParser(
     description='Record audio and send it to a server.',
     epilog='python main.py -s 60 -m 50.0 -u "https://{YOUR_ID}.supabase.co" -t "API_TOKEN" -r -v'
 )
 
-parser.add_argument('-u', '--base-url', type=str, required=True,
+parser.add_argument('-u', '--base-url', type=str, required=False,default=getenv("SUPABASE_URL"),
                     help="The base URL to which the recordings are sent.")
-parser.add_argument('-t', '--token', type=str, required=True,
+parser.add_argument('-t', '--token', type=str, required=False,default=getenv("SUPABASE_ANON_KEY"),
                     help="API token for authentication with the server.")
 parser.add_argument('-s', '--seconds', type=int, default=30,
                     help="Duration of each recording segment in seconds. (default 30)")
@@ -45,6 +46,7 @@ CHANNELS = 1
 RATE = 16000
 CHUNK = 1024
 WAVE_OUTPUT_FILENAME = 'recording{}.wav'
+PAUSE = False
 
 audio = pyaudio.PyAudio()
 
@@ -68,6 +70,9 @@ def get_base_url():
 
 
 def store_sound(frames):
+    if PAUSE:
+        logger.debug("PAUSE STORE WHILE PLAYING ")
+        return
     logger.debug('Store and sending wav.')
     filename = get_wav_filename()
     wf = wave.open(filename, 'wb')
@@ -86,8 +91,8 @@ def store_sound(frames):
     logger.info(response.text)
 
 def play():
-    os.system('sox audio.mp3 audio.wav')
-    wf = wave.open('audio.wav', 'rb')
+    PAUSE = True
+    wf = wave.open('response.wav', 'rb')
     p = pyaudio.PyAudio()
 
     def callback(in_data, frame_count, time_info, status):
@@ -110,7 +115,9 @@ def play():
     wf.close()
 
     p.terminate()
+    PAUSE = False
     logger.info('Status: [ RESPONSE SOUND DONE ]')
+    
 
 def main():
     print(f"""
@@ -160,8 +167,7 @@ Starting ADeus sound recording,
                     logger.debug('Still not silent, continuing recording...')
                 else:
                     logger.debug('Listening again... (press Ctrl+C to stop)')
-                logger.info('Status: [ WAITING FOR SOUND ]')
-                play()
+                logger.info('Status: [ WAITING FOR SOUND ]')                
 
     except KeyboardInterrupt:
         logger.info('Recording stopped by user.')

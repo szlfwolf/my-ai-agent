@@ -33,7 +33,7 @@ interface Choice {
 }
 
 // Current models available
-type ModelName = "nousresearch/nous-capybara-34b" | "mistral" | "gpt-4-0125-preview";
+type ModelName = "mistralai/mistral-7b-instruct:free" | "mistral" | "gpt-4-0125-preview";
 
 
 const openaiClient = new OpenAI({
@@ -55,7 +55,7 @@ async function* generateResponse(
       baseURL: "https://openrouter.ai/api/v1",
       apiKey: Deno.env.get("OPENROUTER_API_KEY"),
     });
-    modelName = "nousresearch/nous-capybara-34b";
+    modelName = "mistralai/mistral-7b-instruct:free";
   } else if (useOllama) {
     client = new OpenAI({
       baseURL: Deno.env.get("OLLAMA_BASE_URL"),

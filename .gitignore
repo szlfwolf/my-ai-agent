@@ -71,3 +71,6 @@ vendor/
 venv/
 
 **/build
+
+software/
+account.yaml
