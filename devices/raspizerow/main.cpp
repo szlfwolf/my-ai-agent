@@ -5,11 +5,13 @@
 #include <vector>
 #include <iostream>
 #include <alsa/asoundlib.h>
+#include <mpg123.h>
 #include <curl/curl.h>
 #include <fstream>
 #include "cxxopts.hpp"
 #include <chrono>
 #include <filesystem> // C++17 feature
+using namespace std;
 
 #define DO_NOT_APPLY_GAIN 1.0
 
@@ -17,11 +19,23 @@
 int bytesPerSample = 4;
 short channels = 1;
 unsigned int sampleRate = 44100;
-int durationInSeconds = 60; // Duration you want to accumulate before sending
+int durationInSeconds = 10; // Duration you want to accumulate before sending
 int targetBytes = sampleRate * durationInSeconds * bytesPerSample * channels;
 int rc;
 float audio_gain = DO_NOT_APPLY_GAIN;
 bool save_to_local_file = false;
+// pause recording flag
+bool waitting = false;
+// mp3
+snd_pcm_t *pcm_handle;
+mpg123_handle *mpg_handle;
+
+struct MemoryStruct {
+    char *memory;
+    size_t size;
+};
+
+
 
 template <typename T>
 class SafeQueue
@@ -91,6 +105,13 @@ void recordAudio(snd_pcm_t *capture_handle, snd_pcm_uframes_t period_size)
                 accumulatedBuffer.clear();
             }
         }
+        // waitting for back
+        while(waitting){
+            snd_pcm_pause(capture_handle,1);
+            std::cout << "=== waitting ===" << std::endl;
+            sleep(2);
+        }
+        snd_pcm_pause(capture_handle,0);
     }
 }
 
@@ -174,6 +195,12 @@ void saveWavToFile(const std::vector<char> &buffer)
     }
 }
 
+size_t writeData(void *buffer, size_t size, size_t nmemb, void *user_p) {
+    FILE *fp = (FILE *)user_p;
+    size_t return_size = fwrite(buffer,size,nmemb,fp);
+    return return_size;
+}
+
 void sendWavBuffer(const std::vector<char> &buffer)
 {
     if (save_to_local_file)
@@ -190,14 +217,15 @@ void sendWavBuffer(const std::vector<char> &buffer)
         return;
     }
 
-    std::string url = std::string(supabaseUrlEnv) + "/functions/v1/process-audio";
+    std::string url = std::string(supabaseUrlEnv) + "/functions/v1/chat-audio";
     std::string authToken = getenv("AUTH_TOKEN");
 
     // Initialize CURL
     curl_global_init(CURL_GLOBAL_ALL);
-    curl = curl_easy_init();
+    curl = curl_easy_init();  
     if (curl)
     {
+        FILE *fp = fopen("output.wav", "wb"); // 打开一个用于写入的文件        
         struct curl_slist *headers = NULL;
         headers = curl_slist_append(headers, ("Authorization: Bearer " + authToken).c_str());
         headers = curl_slist_append(headers, "Content-Type: audio/wav");
@@ -207,18 +235,35 @@ void sendWavBuffer(const std::vector<char> &buffer)
         curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(buffer.size()));
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, buffer.data());
         curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L); // Enable verbose for testing
+        //得到请求结果后的回调函数
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &writeData);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
 
         res = curl_easy_perform(curl);
+        std::cout << res << std::endl;
         if (res != CURLE_OK)
-            std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
+            std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;         
 
-        // Cleanup
+        // 清理资源
         curl_slist_free_all(headers);
         curl_easy_cleanup(curl);
+
+        // 关闭文件
+        fclose(fp); 
+
+        std::cout << "ready to play" << std::endl;
+
+        // play mp3
+        // 播放wav文件
+        system("aplay output.wav");
+        
+        waitting = false;
     }
 
     curl_global_cleanup();
 }
+
+
 
 void handleAudioBuffer()
 {
@@ -250,6 +295,9 @@ void handleAudioBuffer()
         // Process and send the accumulated data
         if (!dataChunk.empty())
         {
+            // set flag to pause recording
+            waitting = true;
+
             // Create the WAV header in memory
             std::vector<char> wavHeader;
             int bitsPerSample = 32;
@@ -310,6 +358,19 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    // Initialize ALSA PCM handle
+    snd_pcm_open(&pcm_handle, "default", SND_PCM_STREAM_PLAYBACK, 0);
+
+    // Initialize mpg123 library
+    int err;
+    mpg123_init();
+    mpg_handle = mpg123_new(NULL, &err);
+    mpg123_open_feed(mpg_handle);
+    
+    // Set up format and rate
+    mpg123_format_none(mpg_handle);
+    mpg123_format(mpg_handle, 44100, MPG123_STEREO, MPG123_ENC_SIGNED_16);
+
     // Set PCM parameters
     snd_pcm_uframes_t buffer_size;
     snd_pcm_uframes_t period_size;
@@ -343,6 +404,11 @@ int main(int argc, char *argv[])
 
     recordingThread.join();
     sendingThread.join();
+
+    // Clean up
+    mpg123_close(mpg_handle);
+    mpg123_delete(mpg_handle);
+    mpg123_exit();
 
     // Stop PCM device and drop pending frames
     snd_pcm_drop(capture_handle);

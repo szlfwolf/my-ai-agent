@@ -20,8 +20,8 @@ parser.add_argument('-u', '--base-url', type=str, required=False,default=getenv(
                     help="The base URL to which the recordings are sent.")
 parser.add_argument('-t', '--token', type=str, required=False,default=getenv("SUPABASE_ANON_KEY"),
                     help="API token for authentication with the server.")
-parser.add_argument('-s', '--seconds', type=int, default=30,
-                    help="Duration of each recording segment in seconds. (default 30)")
+parser.add_argument('-s', '--seconds', type=int, default=10,
+                    help="Duration of each recording segment in seconds. (default 10)")
 parser.add_argument('-m', '--sensitivity', type=float, default=0.0,
                     help="Microphone sensitivity threshold (0.0 to 100.0, default: 0).")
 parser.add_argument('-l', '--save', action='store_true', help="Save recordings locally.")
@@ -84,11 +84,12 @@ def store_sound(frames):
 
     with open(filename, 'rb') as f:
         files = {'file': (filename, f, 'audio/wav')}
-        response = requests.post(f'{get_base_url()}/functions/v1/process-audio', files=files, headers={
-            'Authorization': f'Bearer {args.token}',
-            'apikey': args.token,
-        }, timeout=540)
-    logger.info(response.text)
+        # response = requests.post(f'{get_base_url()}/functions/v1/process-audio', files=files, headers={
+        #     'Authorization': f'Bearer {args.token}',
+        #     'apikey': args.token,
+        # }, timeout=540)
+        # logger.info(response.text)
+    play()
 
 def play():
     PAUSE = True
@@ -167,7 +168,8 @@ Starting ADeus sound recording,
                     logger.debug('Still not silent, continuing recording...')
                 else:
                     logger.debug('Listening again... (press Ctrl+C to stop)')
-                logger.info('Status: [ WAITING FOR SOUND ]')                
+                logger.info('Status: [ WAITING FOR SOUND ]')     
+                           
 
     except KeyboardInterrupt:
         logger.info('Recording stopped by user.')

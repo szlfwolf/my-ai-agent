@@ -30,9 +30,11 @@ find_package(ALSA REQUIRED)
 find_package(CURL REQUIRED)
 find_package(Threads REQUIRED)
 
+
 target_link_libraries(main PRIVATE
     ${ALSA_LIBRARIES}
     ${CURL_LIBRARIES}
     Threads::Threads
     cxxopts
+    mpg123
 )

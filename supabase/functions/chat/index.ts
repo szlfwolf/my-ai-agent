@@ -33,7 +33,7 @@ interface Choice {
 }
 
 // Current models available
-type ModelName = "mistralai/mistral-7b-instruct:free" | "mistral" | "gpt-4-0125-preview";
+type ModelName = "mistralai/mistral-7b-instruct:free" | "mistral" | "gpt-3.5-turbo";
 
 
 const openaiClient = new OpenAI({
@@ -64,7 +64,7 @@ async function* generateResponse(
     modelName = "mistral"; 
   } else {
     client = openaiClient;
-    modelName = "gpt-4-0125-preview";
+    modelName = "gpt-3.5-turbo";
   }
 
   const completion = await client.chat.completions.create({
