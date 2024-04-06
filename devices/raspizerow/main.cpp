@@ -17,7 +17,7 @@ using namespace std;
 // Assuming 4 bytes per sample for S32_LE format and mono audio
 int bytesPerSample = 4;
 short channels = 1;
-unsigned int sampleRate = 44100;
+unsigned int sampleRate = 8000;
 int durationInSeconds = 10; // Duration you want to accumulate before sending
 int targetBytes = sampleRate * durationInSeconds * bytesPerSample * channels;
 int rc;
@@ -368,7 +368,7 @@ int main(int argc, char *argv[])
                             channels,
                             sampleRate,
                             1,       // allow software resampling
-                            44100); // desired latency
+                            500000); // desired latency
 
     if (rc < 0)
     {
