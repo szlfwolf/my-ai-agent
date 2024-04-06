@@ -24,17 +24,12 @@ int targetBytes = sampleRate * durationInSeconds * bytesPerSample * channels;
 int rc;
 float audio_gain = DO_NOT_APPLY_GAIN;
 bool save_to_local_file = false;
-// pause recording flag
 bool waitting = false;
-// mp3
-snd_pcm_t *pcm_handle;
-mpg123_handle *mpg_handle;
 
 struct MemoryStruct {
     char *memory;
     size_t size;
 };
-
 
 
 template <typename T>
@@ -105,13 +100,10 @@ void recordAudio(snd_pcm_t *capture_handle, snd_pcm_uframes_t period_size)
                 accumulatedBuffer.clear();
             }
         }
-        // waitting for back
-        while(waitting){
-            snd_pcm_pause(capture_handle,1);
-            std::cout << "=== waitting ===" << std::endl;
-            sleep(2);
+        if(waitting){            
+            std::cout << "waitting..." << std::endl;
+            sleep(1);
         }
-        snd_pcm_pause(capture_handle,0);
     }
 }
 
@@ -253,19 +245,14 @@ void sendWavBuffer(const std::vector<char> &buffer)
 
         std::cout << "ready to play" << std::endl;
 
-        // play mp3
         // 播放wav文件
         system("aplay output.wav");
-        
-        waitting = false;
     }
 
     curl_global_cleanup();
 }
 
-
-
-void handleAudioBuffer()
+void handleAudioBuffer(snd_pcm_t *capture_handle)
 {
     while (true)
     {
@@ -297,6 +284,11 @@ void handleAudioBuffer()
         {
             // set flag to pause recording
             waitting = true;
+            // 播放提示wav文件
+            system("aplay ding.wav");
+            int pauseFlag = snd_pcm_pause(capture_handle, 1);
+            std::cout << "audio pause: " << pauseFlag << std::endl;
+
 
             // Create the WAV header in memory
             std::vector<char> wavHeader;
@@ -311,6 +303,15 @@ void handleAudioBuffer()
             wavBuffer.insert(wavBuffer.end(), dataChunk.begin(), dataChunk.end());
 
             sendWavBuffer(wavBuffer);
+
+            // resume recording
+            system("aplay dong.wav");
+            int resumeFlag = snd_pcm_pause(capture_handle, 0);
+            int dropFlag = snd_pcm_drop(capture_handle);
+            snd_pcm_prepare(capture_handle);
+            std::cout << "audio resume & drop : " << resumeFlag << dropFlag << std::endl;
+            waitting = false;
+
         }
     }
 }
@@ -358,19 +359,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // Initialize ALSA PCM handle
-    snd_pcm_open(&pcm_handle, "default", SND_PCM_STREAM_PLAYBACK, 0);
-
-    // Initialize mpg123 library
-    int err;
-    mpg123_init();
-    mpg_handle = mpg123_new(NULL, &err);
-    mpg123_open_feed(mpg_handle);
-    
-    // Set up format and rate
-    mpg123_format_none(mpg_handle);
-    mpg123_format(mpg_handle, 44100, MPG123_STEREO, MPG123_ENC_SIGNED_16);
-
     // Set PCM parameters
     snd_pcm_uframes_t buffer_size;
     snd_pcm_uframes_t period_size;
@@ -381,7 +369,7 @@ int main(int argc, char *argv[])
                             channels,
                             sampleRate,
                             1,       // allow software resampling
-                            500000); // desired latency
+                            44100); // desired latency
 
     if (rc < 0)
     {
@@ -400,15 +388,10 @@ int main(int argc, char *argv[])
     std::thread recordingThread(recordAudio, capture_handle, period_size);
 
     // Start the sending thread
-    std::thread sendingThread(handleAudioBuffer);
+    std::thread sendingThread(handleAudioBuffer, capture_handle);
 
     recordingThread.join();
     sendingThread.join();
-
-    // Clean up
-    mpg123_close(mpg_handle);
-    mpg123_delete(mpg_handle);
-    mpg123_exit();
 
     // Stop PCM device and drop pending frames
     snd_pcm_drop(capture_handle);
