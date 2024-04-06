@@ -5,7 +5,6 @@
 #include <vector>
 #include <iostream>
 #include <alsa/asoundlib.h>
-#include <mpg123.h>
 #include <curl/curl.h>
 #include <fstream>
 #include "cxxopts.hpp"
